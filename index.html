@@ -9,16 +9,12 @@
     <style>
         body { background: #0d1117; color: #c9d1d9; font-family: 'Inter', sans-serif; }
         .card-custom { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-        
-        /* Stili per la leggibilità dei parametri */
         .param-label { color: #ffffff; font-weight: 600; font-size: 0.9rem; margin-bottom: 2px; display: block; }
         .param-desc { color: #58a6ff; font-size: 0.75rem; margin-bottom: 8px; display: block; line-height: 1.2; }
         .param-value { color: #3fb950; font-weight: bold; font-size: 1rem; float: right; }
-        
-        .stat-card { background: #0d1117; border: 1px solid #30363d; padding: 15px; border-radius: 8px; text-align: center; }
-        .stat-label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; }
-        .stat-value { font-size: 1.25rem; font-weight: bold; color: #ffffff; }
-        
+        .stat-card { background: #0d1117; border: 1px solid #30363d; padding: 15px; border-radius: 8px; text-align: center; height: 100%; }
+        .stat-label { font-size: 0.7rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1.1rem; font-weight: bold; color: #ffffff; margin-top: 5px; }
         .win { color: #3fb950; } .loss { color: #f85149; }
         input[type=range] { accent-color: #238636; width: 100%; margin-bottom: 15px; cursor: pointer; }
         #status { font-size: 0.85rem; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }
@@ -36,21 +32,21 @@
                     <div class="control-group">
                         <span class="param-value" id="vV">3.0x</span>
                         <label class="param-label">Volume Spike</label>
-                        <small class="param-desc">Moltiplicatore scambi: filtra titoli con esplosione di volumi rispetto alla media 20gg.</small>
+                        <small class="param-desc">Filtra titoli con scambi anomali rispetto alla media 20gg.</small>
                         <input type="range" id="vM" min="1" max="8" step="0.5" value="3" oninput="u()">
                     </div>
 
                     <div class="control-group">
                         <span class="param-value" id="slV">2.0x</span>
                         <label class="param-label">Stop Loss (ATR)</label>
-                        <small class="param-desc">Protezione: usa la volatilità (ATR) per chiudere l'operazione in perdita.</small>
+                        <small class="param-desc">Distanza dello stop basata sulla volatilità del titolo.</small>
                         <input type="range" id="slM" min="1" max="4" step="0.1" value="2" oninput="u()">
                     </div>
 
                     <div class="control-group">
                         <span class="param-value" id="tpV">4.0x</span>
                         <label class="param-label">Take Profit (ATR)</label>
-                        <small class="param-desc">Target: definisce l'obiettivo di guadagno in base alla forza del trend.</small>
+                        <small class="param-desc">Obiettivo di guadagno basato sulla volatilità.</small>
                         <input type="range" id="tpM" min="1" max="10" step="0.5" value="4" oninput="u()">
                     </div>
 
@@ -61,16 +57,17 @@
             <div class="col-md-9">
                 <div class="card-custom">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="m-0">Equity Curve (Capitale nel Tempo)</h5>
+                        <h5 class="m-0">Equity Curve</h5>
                         <h4 id="capRes" class="m-0 text-success">€10,000</h4>
                     </div>
                     <div style="height: 320px;"><canvas id="cEq"></canvas></div>
                     
                     <div class="row mt-4">
-                        <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Win Rate %</div><div id="sWin" class="stat-value">-</div></div></div>
-                        <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Profit Factor</div><div id="sPF" class="stat-value">-</div></div></div>
-                        <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Max Drawdown</div><div id="sMDD" class="stat-value">-</div></div></div>
-                        <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Sharpe Ratio</div><div id="sSR" class="stat-value">-</div></div></div>
+                        <div class="col"><div class="stat-card"><div class="stat-label">Trade Totali</div><div id="sTot" class="stat-value">-</div></div></div>
+                        <div class="col"><div class="stat-card"><div class="stat-label">Win Rate %</div><div id="sWin" class="stat-value">-</div></div></div>
+                        <div class="col"><div class="stat-card"><div class="stat-label">Profit Factor</div><div id="sPF" class="stat-value">-</div></div></div>
+                        <div class="col"><div class="stat-card"><div class="stat-label">Max DD</div><div id="sMDD" class="stat-value">-</div></div></div>
+                        <div class="col"><div class="stat-card"><div class="stat-label">Sharpe</div><div id="sSR" class="stat-value">-</div></div></div>
                     </div>
                 </div>
 
@@ -88,7 +85,6 @@
     </div>
 
     <script>
-        // ... (Logica JavaScript identica alla versione precedente per mantenere la stabilità)
         let db = null; let chart = null;
 
         function u() {
@@ -106,7 +102,7 @@
                 st.className = "bg-ok mb-4";
                 st.innerText = "✅ DATABASE PRONTO";
             } catch (err) {
-                st.innerText = "❌ FILE dati.json NON TROVATO";
+                st.innerText = "❌ ERRORE: dati.json non trovato";
             }
         };
 
@@ -128,11 +124,12 @@
                 });
             });
 
-            let cap = 10000; let trade = null; let trades = []; let equity = [10000];
+            let cap = 10000; let trade = null; let trades = []; 
+            let equityData = [{x: allDates[100], y: 10000}];
             let peak = 10000; let maxDD = 0; let returns = [];
 
             for (let i = 100; i < allDates.length - 1; i++) {
-                if (i % 400 === 0) await new Promise(r => setTimeout(r, 1));
+                if (i % 500 === 0) await new Promise(r => setTimeout(r, 1));
                 const today = allDates[i];
                 const nextDay = allDates[i+1];
 
@@ -172,12 +169,15 @@
                         let exP = null;
                         if (cc <= trade.sl) exP = trade.sl;
                         else if (cc >= trade.tp) exP = cc;
-                        if (exP) {
+                        
+                        if (exP || today === allDates[allDates.length - 2]) {
+                            exP = exP || cc;
                             const r = (exP / trade.p) - 1 - (0.001 * 2);
                             cap *= (1 + r);
                             returns.push(r);
                             trades.push({ t: trade.t, s: trade.ds, i: trade.di, o: today, r: (r*100).toFixed(2) });
-                            equity.push(cap);
+                            equityData.push({x: today, y: cap});
+                            
                             if (cap > peak) peak = cap;
                             let dd = (peak - cap) / peak;
                             if (dd > maxDD) maxDD = dd;
@@ -187,7 +187,7 @@
                 }
             }
 
-            // Calcolo Statistiche Finali
+            // Statistiche
             const winTrades = trades.filter(t => parseFloat(t.r) > 0);
             const winRate = trades.length > 0 ? (winTrades.length / trades.length * 100).toFixed(1) : 0;
             const grossProfit = winTrades.reduce((a, b) => a + parseFloat(b.r), 0);
@@ -199,6 +199,7 @@
             const sharpe = stdDev > 0 ? (avgRet / stdDev * Math.sqrt(252)).toFixed(2) : 0;
 
             document.getElementById('capRes').innerText = "€" + Math.round(cap).toLocaleString();
+            document.getElementById('sTot').innerText = trades.length;
             document.getElementById('sWin').innerText = winRate + "%";
             document.getElementById('sPF').innerText = pf;
             document.getElementById('sMDD').innerText = (maxDD * 100).toFixed(1) + "%";
@@ -211,8 +212,38 @@
             if(chart) chart.destroy();
             chart = new Chart(document.getElementById('cEq'), {
                 type: 'line',
-                data: { labels: equity.map((_,i)=>i), datasets: [{ label: 'Equity €', data: equity, borderColor: '#3fb950', pointRadius: 0, fill: true, backgroundColor: 'rgba(63, 185, 80, 0.1)' }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+                data: {
+                    datasets: [{
+                        label: 'Equity €',
+                        data: equityData,
+                        borderColor: '#3fb950',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        backgroundColor: 'rgba(63, 185, 80, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'category',
+                            ticks: {
+                                color: '#8b949e',
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 10
+                            },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        y: {
+                            ticks: { color: '#8b949e' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
             });
         }
     </script>
