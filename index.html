@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quant Lab PRO - Dashboard</title>
+    <title>Quant Lab PRO - Dashboard Completa</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -19,6 +19,11 @@
         input[type=range] { accent-color: #238636; width: 100%; margin-bottom: 15px; cursor: pointer; }
         #status { font-size: 0.85rem; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }
         .bg-ok { background: rgba(56, 139, 253, 0.15); color: #58a6ff; border: 1px solid #58a6ff; }
+        
+        /* Miglioramento tabella */
+        .table { color: #c9d1d9; vertical-align: middle; }
+        .table thead th { border-bottom: 2px solid #30363d; color: #8b949e; font-size: 0.75rem; text-transform: uppercase; }
+        .table td { border-bottom: 1px solid #21262d; padding: 10px 5px; }
     </style>
 </head>
 <body class="p-4">
@@ -32,14 +37,14 @@
                     <div class="control-group">
                         <span class="param-value" id="vV">3.0x</span>
                         <label class="param-label">Volume Spike</label>
-                        <small class="param-desc">Filtra titoli con scambi anomali rispetto alla media 20gg.</small>
+                        <small class="param-desc">Filtra titoli con esplosione di volumi rispetto alla media.</small>
                         <input type="range" id="vM" min="1" max="8" step="0.5" value="3" oninput="u()">
                     </div>
 
                     <div class="control-group">
                         <span class="param-value" id="slV">2.0x</span>
                         <label class="param-label">Stop Loss (ATR)</label>
-                        <small class="param-desc">Distanza dello stop basata sulla volatilità del titolo.</small>
+                        <small class="param-desc">Protezione basata sulla volatilità media.</small>
                         <input type="range" id="slM" min="1" max="4" step="0.1" value="2" oninput="u()">
                     </div>
 
@@ -72,10 +77,20 @@
                 </div>
 
                 <div class="card-custom">
-                    <h6 class="text-white">Storico Operazioni</h6>
-                    <div class="table-responsive" style="max-height: 350px;">
+                    <h6 class="text-white mb-3">Storico Operazioni Dettagliato</h6>
+                    <div class="table-responsive" style="max-height: 400px;">
                         <table class="table table-dark table-sm small">
-                            <thead><tr><th>Ticker</th><th>Segnale</th><th>Ingresso</th><th>Uscita</th><th>Profit %</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th>Ticker</th>
+                                    <th>Data Segnale</th>
+                                    <th>Entrata (Open)</th>
+                                    <th>Prezzo In</th>
+                                    <th>Uscita</th>
+                                    <th>Prezzo Out</th>
+                                    <th class="text-end">Net %</th>
+                                </tr>
+                            </thead>
                             <tbody id="tLog"></tbody>
                         </table>
                     </div>
@@ -175,7 +190,15 @@
                             const r = (exP / trade.p) - 1 - (0.001 * 2);
                             cap *= (1 + r);
                             returns.push(r);
-                            trades.push({ t: trade.t, s: trade.ds, i: trade.di, o: today, r: (r*100).toFixed(2) });
+                            trades.push({ 
+                                t: trade.t, 
+                                s: trade.ds, 
+                                i: trade.di, 
+                                ip: trade.p.toFixed(2), 
+                                o: today, 
+                                op: exP.toFixed(2), 
+                                r: (r*100).toFixed(2) 
+                            });
                             equityData.push({x: today, y: cap});
                             
                             if (cap > peak) peak = cap;
@@ -206,7 +229,15 @@
             document.getElementById('sSR').innerText = sharpe;
             
             document.getElementById('tLog').innerHTML = trades.reverse().map(t => `
-                <tr><td>${t.t}</td><td>${t.s}</td><td>${t.i}</td><td>${t.o}</td><td class="${t.r>=0?'win':'loss'}">${t.r}%</td></tr>
+                <tr>
+                    <td class="fw-bold">${t.t}</td>
+                    <td>${t.s}</td>
+                    <td>${t.i}</td>
+                    <td>€${t.ip}</td>
+                    <td>${t.o}</td>
+                    <td>€${t.op}</td>
+                    <td class="text-end fw-bold ${t.r>=0?'win':'loss'}">${t.r}%</td>
+                </tr>
             `).join('');
 
             if(chart) chart.destroy();
@@ -229,18 +260,10 @@
                     scales: {
                         x: {
                             type: 'category',
-                            ticks: {
-                                color: '#8b949e',
-                                maxRotation: 0,
-                                autoSkip: true,
-                                maxTicksLimit: 10
-                            },
+                            ticks: { color: '#8b949e', maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
                             grid: { color: 'rgba(255,255,255,0.05)' }
                         },
-                        y: {
-                            ticks: { color: '#8b949e' },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        }
+                        y: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(255,255,255,0.05)' } }
                     },
                     plugins: { legend: { display: false } }
                 }
