@@ -1,0 +1,190 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Quant Lab PRO - V3 (Stable)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; }
+        .card-custom { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .param-value { color: #58a6ff; font-weight: bold; float: right; }
+        .win { color: #3fb950; } .loss { color: #f85149; }
+        input[type=range] { accent-color: #238636; width: 100%; }
+        .status-ready { color: #3fb950; font-size: 0.8rem; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card-custom">
+                    <h6 class="text-white border-bottom pb-2">Trading Console</h6>
+                    <div class="mb-3 mt-3">
+                        <label class="small text-muted">1. Carica DB</label>
+                        <input type="file" id="fIn" class="form-control form-control-sm bg-dark text-white border-secondary">
+                    </div>
+                    <div class="mb-3">
+                        <label class="small text-muted">Volume Threshold</label> <span id="vV" class="param-value">3.0x</span>
+                        <input type="range" id="vM" min="1" max="8" step="0.5" value="3" oninput="u()">
+                    </div>
+                    <div class="mb-3">
+                        <label class="small text-muted">Stop Loss (x ATR)</label> <span id="slV" class="param-value">2.0x</span>
+                        <input type="range" id="slM" min="1" max="4" step="0.1" value="2" oninput="u()">
+                    </div>
+                    <div class="mb-4">
+                        <label class="small text-muted">Take Profit (x ATR)</label> <span id="tpV" class="param-value">4.0x</span>
+                        <input type="range" id="tpM" min="1" max="10" step="0.5" value="4" oninput="u()">
+                    </div>
+                    <button id="runBtn" class="btn btn-success w-100 fw-bold mb-2" disabled onclick="run()">ESEGUI BACKTEST</button>
+                    <div id="status" class="status-ready text-center">In attesa del database...</div>
+                </div>
+            </div>
+
+            <div class="col-md-9">
+                <div class="card-custom">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="m-0 text-white">Equity Curve (Real-time Entry)</h5>
+                        <h4 id="capRes" class="m-0 text-success">€10,000</h4>
+                    </div>
+                    <div style="height: 350px;"><canvas id="cEq"></canvas></div>
+                </div>
+                <div class="card-custom">
+                    <h6 class="text-white">Storico Operazioni (Next Day Open)</h6>
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-dark table-sm small">
+                            <thead><tr><th>Ticker</th><th>Data Segnale</th><th>Ingresso</th><th>Uscita</th><th>Net Profit %</th></tr></thead>
+                            <tbody id="tLog"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let db = null; let chart = null;
+        function u() {
+            document.getElementById('vV').innerText = parseFloat(document.getElementById('vM').value).toFixed(1) + 'x';
+            document.getElementById('slV').innerText = parseFloat(document.getElementById('slM').value).toFixed(1) + 'x';
+            document.getElementById('tpV').innerText = parseFloat(document.getElementById('tpM').value).toFixed(1) + 'x';
+        }
+
+        document.getElementById('fIn').onchange = (e) => {
+            const r = new FileReader();
+            r.onload = (ev) => { 
+                try {
+                    db = JSON.parse(ev.target.result); 
+                    document.getElementById('runBtn').disabled = false;
+                    document.getElementById('status').innerText = "✅ Database pronto!";
+                } catch(err) { alert("Errore nel file JSON"); }
+            };
+            r.readAsText(e.target.files[0]);
+        };
+
+        async function run() {
+            if(!db) return;
+            document.getElementById('status').innerText = "⏳ Elaborazione...";
+            
+            const vMul = parseFloat(document.getElementById('vM').value);
+            const slMul = parseFloat(document.getElementById('slM').value);
+            const tpMul = parseFloat(document.getElementById('tpM').value);
+            const fee = 0.001; 
+            
+            const tickers = Object.keys(db);
+            const allDates = [...new Set(tickers.flatMap(t => db[t].d))].sort();
+            
+            const lookup = {};
+            tickers.forEach(t => { 
+                const dArr = db[t].d || [];
+                const pArr = db[t].p || [];
+                const oArr = db[t].o || [];
+                const vArr = db[t].v || [];
+                
+                lookup[t] = { p: {}, o: {}, v: {} };
+                for(let i=0; i<dArr.length; i++) {
+                    lookup[t].p[dArr[i]] = pArr[i];
+                    lookup[t].o[dArr[i]] = oArr[i];
+                    lookup[t].v[dArr[i]] = vArr[i];
+                }
+            });
+
+            let cap = 10000; let trade = null; let trades = []; let equity = [];
+
+            for (let i = 100; i < allDates.length - 1; i++) {
+                const today = allDates[i];
+                const nextDay = allDates[i+1];
+
+                if (!trade) {
+                    let best = null; let maxM = -Infinity;
+                    
+                    for (const t of tickers) {
+                        const pNow = lookup[t].p[today];
+                        const pOld = lookup[t].p[allDates[i-90]];
+                        
+                        if (pNow && pOld && pNow > 0) {
+                            const mom = (pNow / pOld) - 1;
+                            if (mom > maxM) {
+                                let vSum = 0; let vCount = 0;
+                                for(let j=1; j<=20; j++) {
+                                    const vPast = lookup[t].v[allDates[i-j]];
+                                    if(vPast) { vSum += vPast; vCount++; }
+                                }
+                                const vAvg = vCount > 0 ? (vSum / vCount) : 0;
+                                const vToday = lookup[t].v[today] || 0;
+
+                                if (vAvg > 0 && vToday > (vAvg * vMul)) { 
+                                    maxM = mom; best = t; 
+                                }
+                            }
+                        }
+                    }
+
+                    if (best) {
+                        const entryPrice = lookup[best].o[nextDay];
+                        if(entryPrice && entryPrice > 0) {
+                            let diffs = [];
+                            for(let j=0; j<20; j++) {
+                                const c1 = lookup[best].p[allDates[i-j]];
+                                const c2 = lookup[best].p[allDates[i-j-1]];
+                                if(c1 && c2) diffs.push(Math.abs(c1 - c2));
+                            }
+                            const atr = diffs.length > 0 ? (diffs.reduce((a,b)=>a+b,0)/diffs.length) : (entryPrice * 0.02);
+                            trade = { t: best, p: entryPrice, sl: entryPrice-(slMul*atr), tp: entryPrice+(tpMul*atr), d_seg: today, d_in: nextDay };
+                        }
+                    }
+                } else {
+                    const currentClose = lookup[trade.t].p[today];
+                    if (currentClose) {
+                        let exitP = null;
+                        if (currentClose <= trade.sl) exitP = trade.sl;
+                        else if (currentClose >= trade.tp) exitP = currentClose;
+
+                        if (exitP) {
+                            const netRet = (exitP / trade.p) - 1 - (fee * 2);
+                            cap *= (1 + netRet);
+                            trades.push({ t: trade.t, s: trade.d_seg, i: trade.d_in, o: today, r: (netRet*100).toFixed(2) });
+                            equity.push({ d: today, v: cap.toFixed(2) });
+                            trade = null;
+                        }
+                    }
+                }
+            }
+
+            document.getElementById('capRes').innerText = "€" + Math.round(cap).toLocaleString();
+            document.getElementById('tLog').innerHTML = trades.reverse().map(t => `
+                <tr><td>${t.t}</td><td>${t.s}</td><td>${t.i}</td><td>${t.o}</td><td class="${t.r>=0?'win':'loss'}">${t.r}%</td></tr>
+            `).join('');
+
+            if(chart) chart.destroy();
+            chart = new Chart(document.getElementById('cEq'), {
+                type: 'line',
+                data: { labels: equity.map(e=>e.d), datasets: [{ label: 'Equity €', data: equity.map(e=>e.v), borderColor: '#3fb950', pointRadius: 0, fill: true, backgroundColor: 'rgba(63, 185, 80, 0.1)', borderWidth: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+            });
+            document.getElementById('status').innerText = "✅ Backtest completato!";
+        }
+    </script>
+</body>
+</html>
