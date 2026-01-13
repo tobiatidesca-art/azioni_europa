@@ -2,18 +2,20 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>Quant Lab PRO - Online</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Lab PRO - Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background: #0d1117; color: #c9d1d9; font-family: 'Inter', sans-serif; }
         .card-custom { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         .param-value { color: #58a6ff; font-weight: bold; float: right; }
+        .stat-card { background: #0d1117; border: 1px solid #30363d; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; }
+        .stat-value { font-size: 1.25rem; font-weight: bold; color: #ffffff; }
         .win { color: #3fb950; } .loss { color: #f85149; }
         input[type=range] { accent-color: #238636; width: 100%; }
-        #status { font-size: 0.85rem; padding: 10px; border-radius: 5px; }
-        .bg-wait { background: #21262d; color: #8b949e; }
-        .bg-ok { background: rgba(56, 139, 253, 0.15); color: #58a6ff; }
+        #status { font-size: 0.85rem; padding: 8px; border-radius: 5px; text-align: center; }
     </style>
 </head>
 <body class="p-4">
@@ -22,35 +24,56 @@
             <div class="col-md-3">
                 <div class="card-custom">
                     <h6 class="text-white border-bottom pb-2">Trading Console</h6>
-                    <div id="status" class="bg-wait mb-3 mt-2">Caricamento dati...</div>
+                    <div id="status" class="bg-dark mb-3 mt-2">Inizializzazione...</div>
                     
                     <div class="mb-3">
-                        <label class="small text-muted">Volume Spike</label> <span id="vV" class="param-value">3.0x</span>
+                        <label class="small text-muted" title="Moltiplicatore del volume medio degli ultimi 20 giorni">Volume Threshold</label> 
+                        <span id="vV" class="param-value">3.0x</span>
                         <input type="range" id="vM" min="1" max="8" step="0.5" value="3" oninput="u()">
                     </div>
                     <div class="mb-3">
-                        <label class="small text-muted">Stop Loss (x ATR)</label> <span id="slV" class="param-value">2.0x</span>
+                        <label class="small text-muted" title="Distanza dello stop loss basata sulla volatilità (ATR)">Stop Loss (x ATR)</label> 
+                        <span id="slV" class="param-value">2.0x</span>
                         <input type="range" id="slM" min="1" max="4" step="0.1" value="2" oninput="u()">
                     </div>
                     <div class="mb-4">
-                        <label class="small text-muted">Take Profit (x ATR)</label> <span id="tpV" class="param-value">4.0x</span>
+                        <label class="small text-muted" title="Distanza del target basata sulla volatilità (ATR)">Take Profit (x ATR)</label> 
+                        <span id="tpV" class="param-value">4.0x</span>
                         <input type="range" id="tpM" min="1" max="10" step="0.5" value="4" oninput="u()">
                     </div>
-                    <button id="runBtn" class="btn btn-success w-100 fw-bold" disabled onclick="run()">ESEGUI BACKTEST</button>
+                    <button id="runBtn" class="btn btn-success w-100 fw-bold mb-3" disabled onclick="run()">ESEGUI BACKTEST</button>
+                    
+                    <div class="small text-muted border-top pt-3">
+                        <p><strong>Parametri:</strong><br>
+                        - <b>Volume:</b> Cerca titoli con scambi anomali rispetto alla media.<br>
+                        - <b>ATR:</b> Calcola Stop e Profit in base a quanto il titolo "si muove" realmente, non in % fissa.</p>
+                    </div>
                 </div>
             </div>
 
             <div class="col-md-9">
-                <div class="card-custom">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="m-0">Equity Curve</h5>
-                        <h4 id="capRes" class="m-0 text-success">€10,000</h4>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card-custom">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="m-0">Equity Curve</h5>
+                                <h4 id="capRes" class="m-0 text-success">€10,000</h4>
+                            </div>
+                            <div style="height: 300px;"><canvas id="cEq"></canvas></div>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Win Rate</div><div id="sWin" class="stat-value">-</div></div></div>
+                                <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Profit Factor</div><div id="sPF" class="stat-value">-</div></div></div>
+                                <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Max Drawdown</div><div id="sMDD" class="stat-value">-</div></div></div>
+                                <div class="col-md-3 col-6 mb-2"><div class="stat-card"><div class="stat-label">Sharpe Ratio</div><div id="sSR" class="stat-value">-</div></div></div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="height: 350px;"><canvas id="cEq"></canvas></div>
                 </div>
+
                 <div class="card-custom">
                     <h6 class="text-white">Storico Operazioni</h6>
-                    <div class="table-responsive" style="max-height: 400px;">
+                    <div class="table-responsive" style="max-height: 300px;">
                         <table class="table table-dark table-sm small">
                             <thead><tr><th>Ticker</th><th>Segnale</th><th>Ingresso</th><th>Uscita</th><th>Net %</th></tr></thead>
                             <tbody id="tLog"></tbody>
@@ -64,53 +87,49 @@
     <script>
         let db = null; let chart = null;
 
-        // CARICAMENTO AUTOMATICO AL LANCIO
-        window.onload = async () => {
-            const statusBox = document.getElementById('status');
-            try {
-                const response = await fetch('dati.json');
-                if (!response.ok) throw new Error();
-                db = await response.json();
-                document.getElementById('runBtn').disabled = false;
-                statusBox.className = "bg-ok mb-3 mt-2 text-center";
-                statusBox.innerText = "✅ Dati caricati. Pronto!";
-            } catch (err) {
-                statusBox.style.background = "#f8514933";
-                statusBox.style.color = "#f85149";
-                statusBox.innerText = "❌ Errore: Assicurati che dati.json sia nel repository.";
-            }
-        };
-
         function u() {
             document.getElementById('vV').innerText = parseFloat(document.getElementById('vM').value).toFixed(1) + 'x';
             document.getElementById('slV').innerText = parseFloat(document.getElementById('slM').value).toFixed(1) + 'x';
             document.getElementById('tpV').innerText = parseFloat(document.getElementById('tpM').value).toFixed(1) + 'x';
         }
 
+        window.onload = async () => {
+            const st = document.getElementById('status');
+            try {
+                const response = await fetch('dati.json');
+                db = await response.json();
+                document.getElementById('runBtn').disabled = false;
+                st.className = "bg-primary-subtle text-primary p-2 mb-3 rounded text-center small";
+                st.innerText = "✅ Database Caricato";
+            } catch (err) {
+                st.innerText = "❌ Errore caricamento dati.json";
+            }
+        };
+
         async function run() {
             if(!db) return;
             const vMul = parseFloat(document.getElementById('vM').value);
             const slMul = parseFloat(document.getElementById('slM').value);
             const tpMul = parseFloat(document.getElementById('tpM').value);
-            const fee = 0.001; 
+            const fee = 0.001;
             
             const tickers = Object.keys(db);
             const allDates = [...new Set(tickers.flatMap(t => db[t].d))].sort();
-            
             const lookup = {};
-            tickers.forEach(t => { 
-                const dArr = db[t].d || [];
+            tickers.forEach(t => {
                 lookup[t] = { p: {}, o: {}, v: {} };
-                for(let i=0; i<dArr.length; i++) {
-                    lookup[t].p[dArr[i]] = db[t].p[i];
-                    lookup[t].o[dArr[i]] = db[t].o[i];
-                    lookup[t].v[dArr[i]] = db[t].v[i];
-                }
+                db[t].d.forEach((d, i) => {
+                    lookup[t].p[d] = db[t].p[i];
+                    lookup[t].o[d] = db[t].o[i];
+                    lookup[t].v[d] = db[t].v[i];
+                });
             });
 
-            let cap = 10000; let trade = null; let trades = []; let equity = [];
+            let cap = 10000; let trade = null; let trades = []; let equity = [10000];
+            let peak = 10000; let maxDD = 0; let returns = [];
 
             for (let i = 100; i < allDates.length - 1; i++) {
+                if (i % 500 === 0) await new Promise(r => setTimeout(r, 1));
                 const today = allDates[i];
                 const nextDay = allDates[i+1];
 
@@ -122,7 +141,7 @@
                         if (pN && pO) {
                             const mom = (pN / pO) - 1;
                             if (mom > maxM) {
-                                let vS=0; let vC=0;
+                                let vS=0, vC=0;
                                 for(let j=1; j<=20; j++) {
                                     const vP = lookup[t].v[allDates[i-j]];
                                     if(vP) { vS += vP; vC++; }
@@ -150,19 +169,41 @@
                         let exP = null;
                         if (cc <= trade.sl) exP = trade.sl;
                         else if (cc >= trade.tp) exP = cc;
-
                         if (exP) {
                             const r = (exP / trade.p) - 1 - (fee * 2);
                             cap *= (1 + r);
+                            returns.push(r);
                             trades.push({ t: trade.t, s: trade.ds, i: trade.di, o: today, r: (r*100).toFixed(2) });
-                            equity.push({ d: today, v: cap.toFixed(2) });
+                            equity.push(cap);
+                            if (cap > peak) peak = cap;
+                            let dd = (peak - cap) / peak;
+                            if (dd > maxDD) maxDD = dd;
                             trade = null;
                         }
                     }
                 }
             }
 
+            // Calcolo Statistiche
+            const winTrades = trades.filter(t => parseFloat(t.r) > 0);
+            const lossTrades = trades.filter(t => parseFloat(t.r) <= 0);
+            const winRate = trades.length > 0 ? (winTrades.length / trades.length * 100).toFixed(1) : 0;
+            
+            const grossProfit = winTrades.reduce((a, b) => a + parseFloat(b.r), 0);
+            const grossLoss = Math.abs(lossTrades.reduce((a, b) => a + parseFloat(b.r), 0));
+            const pf = grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : grossProfit.toFixed(2);
+
+            const avgRet = returns.reduce((a,b)=>a+b,0) / returns.length;
+            const stdDev = Math.sqrt(returns.map(x => Math.pow(x - avgRet, 2)).reduce((a,b)=>a+b,0) / returns.length);
+            const sharpe = stdDev > 0 ? (avgRet / stdDev * Math.sqrt(252)).toFixed(2) : 0;
+
+            // UI Update
             document.getElementById('capRes').innerText = "€" + Math.round(cap).toLocaleString();
+            document.getElementById('sWin').innerText = winRate + "%";
+            document.getElementById('sPF').innerText = pf;
+            document.getElementById('sMDD').innerText = (maxDD * 100).toFixed(1) + "%";
+            document.getElementById('sSR').innerText = sharpe;
+            
             document.getElementById('tLog').innerHTML = trades.reverse().map(t => `
                 <tr><td>${t.t}</td><td>${t.s}</td><td>${t.i}</td><td>${t.o}</td><td class="${t.r>=0?'win':'loss'}">${t.r}%</td></tr>
             `).join('');
@@ -170,8 +211,8 @@
             if(chart) chart.destroy();
             chart = new Chart(document.getElementById('cEq'), {
                 type: 'line',
-                data: { labels: equity.map(e=>e.d), datasets: [{ label: 'Equity €', data: equity.map(e=>e.v), borderColor: '#3fb950', pointRadius: 0, fill: true, backgroundColor: 'rgba(63, 185, 80, 0.1)' }] },
-                options: { responsive: true, maintainAspectRatio: false }
+                data: { labels: trades.map((_,idx)=>idx), datasets: [{ label: 'Equity €', data: equity, borderColor: '#3fb950', pointRadius: 0, fill: true, backgroundColor: 'rgba(63, 185, 80, 0.1)' }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
             });
         }
     </script>
